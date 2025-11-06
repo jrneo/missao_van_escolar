@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Missão Van Escolar</title>
+    <!-- Carrega Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <style>
+        /* Estilo Customizado para a Estética do Jogo */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8; 
+            min-height: 100vh;
+            padding: 10px;
+        }
+        
+        /* Container Principal */
+        .game-area {
+            width: 100%;
+            max-width: 700px;
+            min-height: 550px;
+            background-color: #ffffff;
+            border-radius: 20px;
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.25);
+            margin: 20px auto;
+            padding: 20px;
+            overflow: hidden;
+            border: 6px solid #f9d71c; /* Borda Amarela */
+        }
+
+        /* Cena da Van (Fases 1 e 3) */
+        .van-interior-scene {
+            background-color: #a0d2eb; 
+            background-image: linear-gradient(to top, #6fa8dc 0%, #a0d2eb 100%);
+            border-radius: 10px;
+            padding: 10px;
+            min-height: 350px;
+            position: relative;
+        }
+
+        /* Estilo do Banco e Aluno */
+        .seat-container {
+            flex: 1 1 45%; /* Flexível para mobile */
+            padding: 5px;
+            cursor: pointer;
+            transition: transform 0.1s;
+            position: relative;
+        }
+        
+        .seat {
+            background-color: #ff8c00; /* Laranja vibrante */
+            height: 110px; /* Ajustado para melhor visual */
+            border-radius: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            overflow: hidden;
+            box-shadow: 0 5px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .student-figure {
+            position: absolute;
+            top: 15px; 
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 50px;
+            z-index: 10;
+            transition: all 0.3s ease-in-out;
+            text-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+        }
+        
+        /* Cinto de segurança na diagonal */
+        .seat-belt {
+            position: absolute;
+            top: 25px; 
+            left: 20px; 
+            width: 60px; 
+            height: 10px; 
+            background: linear-gradient(to right, #38a169, #68d391); 
+            border-radius: 5px;
+            opacity: 0; 
+            transition: opacity 0.3s;
+            z-index: 15; 
+            transform: rotate(45deg); 
+            transform-origin: top left;
+        }
+        
+        .seat-container[data-buckled="true"] .seat-belt {
+            opacity: 1; 
+        }
+
+        .seat-container[data-buckled="false"] .student-figure {
+             animation: unbuckled-pulse 1.5s infinite alternate;
+        }
+
+        @keyframes unbuckled-pulse {
+            0% { transform: translate(-50%, 0); opacity: 1; }
+            100% { transform: translate(-50%, -5px); opacity: 0.8; }
+        }
+
+        /* Animação de Mau Comportamento (Fase 3) */
+        .bad-behavior {
+            animation: shake 0.5s infinite;
+            border: 4px solid #e53e3e;
+            border-radius: 50%;
+            padding: 5px;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translate(-50%, 0) rotate(0deg); }
+            25% { transform: translate(-50%, 0) rotate(-5deg); }
+            75% { transform: translate(-50%, 0) rotate(5deg); }
+        }
+
+        /* Cena de Travessia (Fases 2 e 4) */
+        .road-scene {
+            background-color: #5a626a; 
+            border-radius: 10px;
+            min-height: 350px;
+            position: relative;
+            overflow: hidden;
+            border-bottom: 5px solid #f9d71c; 
+        }
+        .crosswalk {
+            position: absolute;
+            width: 100%;
+            height: 50px;
+            top: 150px;
+            display: flex;
+            justify-content: space-around;
+        }
+        .crosswalk div {
+            width: 10px;
+            height: 100%;
+            background-color: #ffffff;
+        }
+        .traffic-light {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background-color: #333;
+            padding: 5px;
+            border-radius: 10px;
+            box-shadow: 0 5px 10px rgba(0, 0, 0, 0.5);
+            z-index: 20;
+        }
+        .light {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            margin: 5px;
+            opacity: 0.3;
+            transition: opacity 0.3s;
+        }
+        .light.red { background-color: #e53e3e; }
+        .light.green { background-color: #38a169; }
+        .light.active { opacity: 1; }
+
+        /* Animação de Carro (Obstáculo) */
+        .car-obstacle {
+            position: absolute;
+            top: 220px; 
+            left: 100%;
+            font-size: 40px;
+            animation: traffic-flow 8s linear infinite;
+        }
+        .car-obstacle:nth-child(2) { animation-delay: 4s; }
+
+        @keyframes traffic-flow {
+            0% { left: 100%; }
+            100% { left: -10%; }
+        }
+
+        /* Timing Game (Fase 4) */
+        .timing-bar {
+            background-color: #eee;
+            border: 2px solid #333;
+            height: 30px;
+            width: 90%;
+            margin: 50px auto;
+            position: relative;
+            border-radius: 15px;
+            overflow: hidden;
+        }
+        .safe-zone {
+            position: absolute;
+            left: 40%;
+            width: 20%;
+            height: 100%;
+            background-color: #38a169;
+            opacity: 0.5;
+        }
+        .indicator {
+            position: absolute;
+            height: 100%;
+            width: 15px;
+            background-color: #e53e3e;
+            border-radius: 15px;
+            box-shadow: 0 0 10px #e53e3e;
+        }
+    </style>
+</head>
+<body>
+
+<div class="game-area">
+
+    <header class="text-center mb-6">
+        <h1 class="text-3xl sm:text-4xl font-extrabold text-blue-800 tracking-tight">
+            Missão Van Escolar
+        </h1>
+        <p id="game-status" class="text-lg sm:text-xl text-blue-600 mt-2 font-semibold">
+            Pronto para a Viagem!
+        </p>
+    </header>
+
+    <!-- Visualizações das Fases -->
+    <div id="phase-container" class="transition-all duration-500">
+        
+        <!-- Fase 1 & 3: Interior da Van -->
+        <div id="van-scene" class="van-interior-scene hidden">
+            <p class="text-white font-bold text-center mb-2">Motorista: Use sempre o cinto!</p>
+            <div id="seat-row-1" class="flex justify-around mb-4 space-x-2"></div>
+            <div id="seat-row-2" class="flex justify-around space-x-2"></div>
+            <div id="driver-figure" class="absolute bottom-4 left-4 text-6xl" title="Motorista Simpático">🧑‍✈️</div>
+        </div>
+
+        <!-- Fase 2 & 4: Travessia / Escola -->
+        <div id="road-scene" class="road-scene hidden">
+            <div class="traffic-light">
+                <div id="red-light" class="light red active"></div>
+                <div id="green-light" class="light green"></div>
+            </div>
+            <div class="crosswalk">
+                <div></div><div></div><div></div><div></div><div></div>
+            </div>
+            <div class="car-obstacle" style="left: 100%; animation-delay: 0s;">🚌</div> <!-- Carro 1 -->
+            <div class="car-obstacle" style="left: 100%; animation-delay: 4s;">🚕</div> <!-- Carro 2 -->
+
+            <div class="absolute bottom-0 right-0 text-5xl p-2" title="Professora">👩‍🏫</div>
+            <p id="road-info" class="text-white font-bold text-center mt-4">Espere o sinal verde!</p>
+        </div>
+
+        <!-- Fase 4: Timing (Sub-elemento para o minigame) -->
+        <div id="timing-minigame" class="hidden mt-8">
+            <h3 class="text-center text-xl font-bold text-gray-700 mb-4">Aperte para Descer na Hora Certa!</h3>
+            <div class="timing-bar">
+                <div class="safe-zone"></div>
+                <div id="indicator" class="indicator"></div>
+            </div>
+            <button id="timing-action-button" class="mt-4 w-full py-3 bg-red-500 hover:bg-red-600 text-white text-xl font-bold rounded-lg shadow-md transition duration-300">
+                DESCER!
+            </button>
+        </div>
+
+        <!-- Tela de Fim de Jogo/Sucesso -->
+        <div id="end-scene" class="hidden text-center p-10">
+            <h2 id="end-title" class="text-4xl font-extrabold text-green-700 mb-4"></h2>
+            <p id="end-message" class="text-xl text-gray-700 mb-6"></p>
+            <img src="https://placehold.co/400x150/f9d71c/38a169?text=Escola+Municipal+Alegria" onerror="this.style.display='none'" class="mx-auto rounded-lg shadow-lg">
+            <p class="mt-6 text-2xl font-bold text-blue-600">Pontuação Total: <span id="final-score">0</span></p>
+        </div>
+        
+    </div>
+    
+    <!-- Interface de Controle e Pontuação -->
+    <div class="mt-8 bg-white p-4 rounded-xl shadow-lg border-t-4 border-blue-500">
+        <div class="flex justify-between items-center text-lg font-bold text-gray-700 mb-2">
+            <p>Pontuação: <span id="current-score" class="text-green-600">0</span></p>
+            <p>Máxima: <span id="high-score" class="text-yellow-600">0</span></p>
+        </div>
+        <p class="text-sm font-semibold text-gray-500 mb-4">Fase: <span id="phase-display">1 / 4</span></p>
+
+        <button id="main-action-button" class="mt-4 w-full py-3 bg-green-500 hover:bg-green-600 text-white text-xl font-bold rounded-lg shadow-md transition duration-300">
+            Começar Missão Van Escolar
+        </button>
+    </div>
+
+</div>
+
+<!-- Caixa de Mensagem Customizada (Substitui alert()) -->
+<div id="message-box" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 hidden bg-white p-6 rounded-xl shadow-2xl border-b-8 z-50 max-w-xs text-center">
+    <p id="message-text" class="text-xl font-semibold text-gray-800 mb-4"></p>
+    <button id="close-message-btn" class="py-2 px-4 bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg">
+        Entendi
+    </button>
+</div>
+
+<!-- Caixa de Instruções -->
+<div id="instruction-box" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 hidden bg-blue-500 p-6 rounded-xl shadow-2xl border-b-8 border-yellow-300 z-50 max-w-xs text-center">
+    <h2 id="instruction-title" class="text-2xl font-extrabold text-white mb-3"></h2>
+    <p id="instruction-text" class="text-lg text-white mb-6"></p>
+    <button id="start-phase-btn" class="py-2 px-4 bg-yellow-400 hover:bg-yellow-500 text-blue-900 font-bold rounded-lg shadow-md transition duration-300">
+        Manda Ver!
+    </button>
+</div>
+
+<!-- Scripts Firebase (Obrigatório: auth e firestore) -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // --- VARIÁVEIS GLOBAIS DE AMBIENTE (OBRIGATÓRIO) ---
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+    let app, db, auth, userId = null;
+    let isAuthReady = false;
+
+    // --- VARIÁVEIS DO JOGO ---
+    const TOTAL_STUDENTS = 4;
+    const SCORE_PER_ACTION = 100;
+    const STUDENT_EMOJIS = ['👦', '👧', '🧑', '🧒'];
+    const MAX_PHASE = 4;
+    
+    let students = [];
+    let currentScore = 0;
+    let highScore = 0;
+    let currentPhase = 1;
+    let gameActive = false;
+    let countdownInterval = null;
+    let behaviorInterval = null;
+    let trafficInterval = null;
+    let indicatorAnimation = null;
+
+    // --- ELEMENTOS DO DOM ---
+    const vanScene = document.getElementById('van-scene');
+    const roadScene = document.getElementById('road-scene');
+    const endScene = document.getElementById('end-scene');
+    const timingMinigame = document.getElementById('timing-minigame');
+    const seatRow1 = document.getElementById('seat-row-1');
+    const seatRow2 = document.getElementById('seat-row-2');
+    const mainActionButton = document.getElementById('main-action-button');
+    const gameStatusEl = document.getElementById('game-status');
+    const currentScoreEl = document.getElementById('current-score');
+    const highScoreEl = document.getElementById('high-score');
+    const phaseDisplayEl = document.getElementById('phase-display');
+    const redLightEl = document.getElementById('red-light');
+    const greenLightEl = document.getElementById('green-light');
+    const roadInfoEl = document.getElementById('road-info');
+    const timingActionButton = document.getElementById('timing-action-button');
+    const indicatorEl = document.getElementById('indicator');
+    const instructionBox = document.getElementById('instruction-box');
+    const instructionTitleEl = document.getElementById('instruction-title');
+    const instructionTextEl = document.getElementById('instruction-text');
+    const startPhaseBtn = document.getElementById('start-phase-btn');
+    const endTitleEl = document.getElementById('end-title');
+    const endMessageEl = document.getElementById('end-message');
+    const finalScoreEl = document.getElementById('final-score');
+    const messageBox = document.getElementById('message-box');
+    const messageTextEl = document.getElementById('message-text');
+    const closeMessageBtn = document.getElementById('close-message-btn');
+
+    // --- FUNÇÕES UTILS E UI ---
+
+    const showMessage = (text, isError = false) => {
+        messageTextEl.textContent = text;
+        messageBox.classList.remove('hidden');
+        messageBox.classList.remove(isError ? 'border-yellow-500' : 'border-red-500');
+        messageBox.classList.add(isError ? 'border-red-500' : 'border-yellow-500');
+    };
+
+    closeMessageBtn.addEventListener('click', () => {
+        messageBox.classList.add('hidden');
+    });
+
+    const updateUI = () => {
+        currentScoreEl.textContent = currentScore;
+        highScoreEl.textContent = highScore;
+        phaseDisplayEl.textContent = `${currentPhase} / ${MAX_PHASE}`;
+    };
+
+    const showPhaseScene = (sceneName) => {
+        [vanScene, roadScene, endScene, timingMinigame].forEach(el => el.classList.add('hidden'));
+        if (sceneName === 'van') vanScene.classList.remove('hidden');
+        else if (sceneName === 'road') roadScene.classList.remove('hidden');
+        else if (sceneName === 'timing') { roadScene.classList.remove('hidden'); timingMinigame.classList.remove('hidden'); }
+        else if (sceneName === 'end') endScene.classList.remove('hidden');
+    };
+
+    // --- SISTEMA DE INSTRUÇÕES ---
+
+    const showPhaseInstructions = (phase) => {
+        let title = '';
+        let text = '';
+        
+        switch (phase) {
+            case 1:
+                title = "Fase 1: Superpoder Cinto de Segurança!";
+                text = "E aí, galera? Hora de transformar a van num avião seguro! Antes decolar, o cinto é o seu superpoder. Toque em todos os amigos rapidinho para 'ativar' o cinto deles antes que o tempo zere! Foco e agilidade!";
+                break;
+            case 2:
+                title = "Fase 2: Semáforo Ninja!";
+                text = "Chegou a hora H! Atravessar é fácil, mas só se liga no farol. Clique em 'Atravessar Agora!' **SÓ** quando a luz estiver VERDE. Se apertar no vermelho, a missão falha! Mantenha a calma e o ritmo!";
+                break;
+            case 3:
+                title = "Fase 3: Detetive do Comportamento!";
+                text = "O trajeto começou, mas aqui não é parque! Fique esperto: se alguém virar um '😡' (bravo/bagunceiro), toque nele na hora! Se errar 3 vezes, a missão falha. Rápido, mas com educação!";
+                break;
+            case 4:
+                title = "Fase 4: Pouso Perfeito!";
+                text = "Quase lá! Descer da Van é como dar um super salto, mas tem que ser no momento exato! Fique de olho no indicador vermelho e clique em 'DESCER!' **só quando ele cair na área VERDE**. Boa sorte, craque!";
+                break;
+        }
+
+        instructionTitleEl.textContent = title;
+        instructionTextEl.textContent = text;
+        instructionBox.classList.remove('hidden');
+
+        // Impede ações de jogo enquanto as instruções estão abertas
+        mainActionButton.disabled = true;
+        timingActionButton.disabled = true;
+    };
+
+    const startCurrentPhase = () => {
+        instructionBox.classList.add('hidden');
+        mainActionButton.disabled = false;
+        timingActionButton.disabled = false;
+        
+        switch (currentPhase) {
+            case 1: setupPhase1(); break;
+            case 2: setupPhase2(); break;
+            case 3: setupPhase3(); break;
+            case 4: setupPhase4(); break;
+        }
+    };
+
+    startPhaseBtn.addEventListener('click', startCurrentPhase);
+
+
+    // --- FIREBASE / FIRESTORE (Não alterado) ---
+
+    const initFirebase = async () => {
+        if (Object.keys(firebaseConfig).length === 0) {
+            console.warn("Firebase Config não está definida. O progresso não será salvo.");
+            return;
+        }
+
+        try {
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+            
+            if (initialAuthToken) {
+                await signInWithCustomToken(auth, initialAuthToken);
+            } else {
+                await signInAnonymously(auth);
+            }
+
+            onAuthStateChanged(auth, (user) => {
+                userId = user ? user.uid : crypto.randomUUID();
+                isAuthReady = true;
+                startScoreListener();
+            });
+
+        } catch (error) {
+            console.error("Erro na inicialização do Firebase:", error);
+        }
+    };
+
+    const getFirestorePath = (uid) => {
+        return doc(db, 'artifacts', appId, 'users', uid, 'game_progress', 'van_escolar_progress');
+    };
+
+    const saveHighScore = async (newScore) => {
+        if (!userId || !db) return;
+        
+        try {
+            if (newScore > highScore) {
+                highScore = newScore;
+                const progressRef = getFirestorePath(userId);
+                await setDoc(progressRef, { highScore: newScore, lastUpdated: new Date() }, { merge: true });
+            }
+        } catch (e) {
+            console.error("Erro ao salvar a pontuação máxima:", e);
+        }
+    };
+
+    const startScoreListener = () => {
+        if (!userId || !db || !isAuthReady) return;
+
+        const progressRef = getFirestorePath(userId);
+        
+        onSnapshot(progressRef, (docSnap) => {
+            if (docSnap.exists()) {
+                highScore = docSnap.data().highScore || 0;
+            } else {
+                highScore = 0;
+            }
+            updateUI();
+        }, (error) => {
+            console.error("Erro no listener do Firestore:", error);
+        });
+    };
+
+    // --- LÓGICA GERAL DO JOGO ---
+
+    const resetGame = () => {
+        // Limpa todos os timers e animações pendentes
+        clearInterval(countdownInterval);
+        clearInterval(behaviorInterval);
+        clearInterval(trafficInterval);
+        cancelAnimationFrame(indicatorAnimation);
+
+        students = [];
+        currentScore = 0;
+        currentPhase = 1;
+        gameActive = false;
+        
+        // Limpar estados visuais
+        seatRow1.innerHTML = '';
+        seatRow2.innerHTML = '';
+        timingMinigame.classList.add('hidden');
+        timingActionButton.classList.remove('hidden');
+        
+        mainActionButton.textContent = "Começar Missão Van Escolar";
+        mainActionButton.disabled = false;
+        mainActionButton.classList.remove('bg-gray-400', 'cursor-not-allowed');
+        mainActionButton.classList.add('bg-green-500', 'hover:bg-green-600');
+        
+        gameStatusEl.textContent = "Pronto para a Viagem!";
+        showPhaseScene('van');
+        updateUI();
+    };
+
+    const startGame = () => {
+        resetGame();
+        gameActive = true;
+        nextPhase(1); // Começa mostrando as instruções da Fase 1
+    };
+
+    const endGame = (success) => {
+        gameActive = false;
+        
+        // Limpa todos os timers e animações novamente
+        clearInterval(countdownInterval);
+        clearInterval(behaviorInterval);
+        clearInterval(trafficInterval);
+        cancelAnimationFrame(indicatorAnimation);
+        
+        // Garante que o botão principal volte para o estado inicial
+        mainActionButton.textContent = "Jogar Novamente";
+        mainActionButton.disabled = false;
+        mainActionButton.classList.remove('bg-gray-400', 'cursor-not-allowed');
+        mainActionButton.classList.add('bg-green-500', 'hover:bg-green-600');
+
+        if (success) {
+            endTitleEl.textContent = "MISSÃO COMPLETA!";
+            endMessageEl.textContent = "Parabéns! Você seguiu todas as regras e viajou com segurança até a escola!";
+            endTitleEl.classList.replace('text-red-700', 'text-green-700');
+        } else {
+            endTitleEl.textContent = "FALHA NA MISSÃO!";
+            endMessageEl.textContent = `A segurança falhou na Fase ${currentPhase}. Tente de novo!`;
+            endTitleEl.classList.replace('text-green-700', 'text-red-700');
+            currentScore = 0;
+        }
+
+        finalScoreEl.textContent = currentScore;
+        saveHighScore(currentScore);
+        showPhaseScene('end');
+        updateUI();
+    };
+
+    const nextPhase = (phase) => {
+        if (!gameActive) return;
+        currentPhase = phase;
+        updateUI();
+        
+        if (currentPhase > MAX_PHASE) {
+            endGame(true);
+            return;
+        }
+
+        // Limpa timers da fase anterior
+        clearInterval(countdownInterval);
+        clearInterval(behaviorInterval);
+        clearInterval(trafficInterval);
+        cancelAnimationFrame(indicatorAnimation);
+
+        // Mostra as instruções antes de iniciar a configuração da fase
+        showPhaseInstructions(currentPhase);
+    };
+
+    // --- FASE 1: CINTO DE SEGURANÇA (SETUP REAL) ---
+
+    const createStudentElement = (id, emoji) => {
+        const containerDiv = document.createElement('div');
+        containerDiv.className = 'seat-container';
+        containerDiv.setAttribute('data-student-id', id);
+        containerDiv.setAttribute('data-buckled', 'false');
+
+        const seatDiv = document.createElement('div');
+        seatDiv.className = 'seat';
+
+        const studentFig = document.createElement('span');
+        studentFig.className = 'student-figure';
+        studentFig.textContent = emoji;
+
+        const beltDiv = document.createElement('div');
+        beltDiv.className = 'seat-belt';
+
+        seatDiv.appendChild(beltDiv);
+        containerDiv.appendChild(studentFig);
+        containerDiv.appendChild(seatDiv);
+
+        containerDiv.addEventListener('click', () => buckleSeatbelt(id));
+        
+        return containerDiv;
+    };
+    
+    const setupPhase1 = () => {
+        showPhaseScene('van');
+        seatRow1.innerHTML = '';
+        seatRow2.innerHTML = '';
+        students = [];
+
+        for (let i = 0; i < TOTAL_STUDENTS; i++) {
+            const student = { id: i, buckled: false, emoji: STUDENT_EMOJIS[i % STUDENT_EMOJIS.length] };
+            students.push(student);
+            const studentEl = createStudentElement(i, student.emoji);
+
+            if (i < TOTAL_STUDENTS / 2) {
+                seatRow1.appendChild(studentEl);
+            } else {
+                seatRow2.appendChild(studentEl);
+            }
+        }
+
+        let timer = 15;
+        gameStatusEl.textContent = `Fase 1: Afivele os ${TOTAL_STUDENTS} cintos em ${timer}s!`;
+
+        countdownInterval = setInterval(() => {
+            timer--;
+            gameStatusEl.textContent = `Fase 1: Afivele os ${students.filter(s => s.buckled).length}/${TOTAL_STUDENTS} cintos! Tempo: ${timer}s`;
+            if (timer <= 0) {
+                clearInterval(countdownInterval);
+                endGame(false);
+            }
+        }, 1000);
+    };
+
+    const buckleSeatbelt = (id) => {
+        if (currentPhase !== 1 || !gameActive) return;
+        
+        const studentData = students.find(s => s.id === id);
+        const seatEl = document.querySelector(`[data-student-id="${id}"]`);
+
+        if (studentData && !studentData.buckled) {
+            studentData.buckled = true;
+            seatEl.setAttribute('data-buckled', 'true');
+            currentScore += SCORE_PER_ACTION;
+            showMessage("Cinto ativado! +100 Pontos.", false);
+            updateUI();
+        }
+
+        // Verifica o sucesso da fase
+        if (students.every(s => s.buckled)) {
+            clearInterval(countdownInterval);
+            showMessage("Missão Cinto Concluída!", false);
+            setTimeout(() => nextPhase(2), 2000);
+        }
+    };
+
+    // --- FASE 2: SUBIDA SEGURA (SETUP REAL) ---
+
+    let isTrafficGreen = false;
+    
+    const setupPhase2 = () => {
+        showPhaseScene('road');
+        gameStatusEl.textContent = "Fase 2: Semáforo Ninja Ativado!";
+        mainActionButton.textContent = "Atravessar Agora!";
+        mainActionButton.classList.remove('bg-gray-400', 'cursor-not-allowed');
+        mainActionButton.classList.add('bg-green-500', 'hover:bg-green-600');
+        mainActionButton.disabled = false;
+        
+        roadInfoEl.textContent = "Professora: Olho vivo no farol, galera!";
+        
+        startTrafficLight();
+    };
+
+    const startTrafficLight = () => {
+        // Começa no vermelho
+        isTrafficGreen = false;
+        redLightEl.classList.add('active');
+        greenLightEl.classList.remove('active');
+        roadInfoEl.textContent = "🔴 PARE! O trânsito está livre.";
+
+        trafficInterval = setInterval(() => {
+            isTrafficGreen = !isTrafficGreen;
+            if (isTrafficGreen) {
+                redLightEl.classList.remove('active');
+                greenLightEl.classList.add('active');
+                roadInfoEl.textContent = "🟢 VÁ! A van está esperando.";
+            } else {
+                redLightEl.classList.add('active');
+                greenLightEl.classList.remove('active');
+                roadInfoEl.textContent = "🔴 PARE! O trânsito está livre.";
+            }
+        }, 3000); // Troca a cada 3 segundos
+    };
+
+    const attemptCrossing = () => {
+        if (currentPhase !== 2 || !gameActive) return;
+
+        if (isTrafficGreen) {
+            clearInterval(trafficInterval);
+            currentScore += SCORE_PER_ACTION * 1.5;
+            showMessage("Travessia segura! Mestre Ninja do Semáforo!", false);
+            setTimeout(() => nextPhase(3), 2000);
+        } else {
+            clearInterval(trafficInterval);
+            showMessage("❌ ERRO! Você atravessou no vermelho! Missão falhou!", true);
+            endGame(false);
+        }
+    };
+
+    // --- FASE 3: COMPORTAMENTO NA VAN (SETUP REAL) ---
+
+    let missedCorrections = 0;
+    const MAX_MISSED_CORRECTIONS = 3;
+
+    const setupPhase3 = () => {
+        showPhaseScene('van');
+        // Garante que os alunos estejam na tela e afivelados
+        if (students.length === 0) {
+             for (let i = 0; i < TOTAL_STUDENTS; i++) {
+                students.push({ id: i, buckled: true, emoji: STUDENT_EMOJIS[i % STUDENT_EMOJIS.length] });
+             }
+             setupPhase1();
+        }
+        
+        missedCorrections = 0;
+        gameStatusEl.textContent = "Fase 3: Detetive do Comportamento em Ação!";
+
+        students.forEach(s => {
+            const seatEl = document.querySelector(`[data-student-id="${s.id}"]`);
+            seatEl.classList.remove('bad-behavior');
+            seatEl.onclick = () => correctBehavior(s.id);
+            seatEl.setAttribute('data-buckled', 'true'); // Mantém o cinto afivelado
+        });
+        
+        startBehaviorLoop();
+    };
+
+    const startBehaviorLoop = () => {
+        let loopDuration = 10;
+        
+        const phaseTimer = setInterval(() => {
+            loopDuration--;
+            gameStatusEl.textContent = `Fase 3: Tempo Restante: ${loopDuration}s | Erros: ${missedCorrections}/${MAX_MISSED_CORRECTIONS}`;
+
+            if (loopDuration <= 0) {
+                clearInterval(phaseTimer);
+                clearInterval(behaviorInterval);
+                showMessage("Missão Comportamento OK! Parabéns!", false);
+                setTimeout(() => nextPhase(4), 2000);
+            }
+        }, 1000);
+
+        behaviorInterval = setInterval(() => {
+            if (!gameActive) return;
+
+            const studentId = Math.floor(Math.random() * TOTAL_STUDENTS);
+            const seatEl = document.querySelector(`[data-student-id="${studentId}"]`);
+
+            if (seatEl.classList.contains('bad-behavior')) {
+                missedCorrections++;
+                if (missedCorrections >= MAX_MISSED_CORRECTIONS) {
+                    clearInterval(phaseTimer);
+                    clearInterval(behaviorInterval);
+                    showMessage("❌ ERRO! O Motorista se distraiu! Missão falhou!", true);
+                    endGame(false);
+                    return;
+                }
+            }
+            
+            seatEl.classList.add('bad-behavior');
+            seatEl.querySelector('.student-figure').textContent = '😡';
+
+            setTimeout(() => {
+                if (seatEl.classList.contains('bad-behavior')) {
+                    seatEl.classList.remove('bad-behavior');
+                    seatEl.querySelector('.student-figure').textContent = students.find(s => s.id === studentId).emoji;
+                }
+            }, 1500);
+
+        }, 2000); 
+    };
+
+    const correctBehavior = (id) => {
+        if (currentPhase !== 3 || !gameActive) return;
+
+        const seatEl = document.querySelector(`[data-student-id="${id}"]`);
+
+        if (seatEl.classList.contains('bad-behavior')) {
+            seatEl.classList.remove('bad-behavior');
+            seatEl.querySelector('.student-figure').textContent = students.find(s => s.id === id).emoji;
+            currentScore += SCORE_PER_ACTION;
+            showMessage("Comportamento corrigido! +100 Pontos.", false);
+            updateUI();
+        }
+    };
+
+    // --- FASE 4: CHEGADA À ESCOLA (SETUP REAL) ---
+
+    let startTime;
+    let indicatorPosition = 0;
+    const INDICATOR_SPEED = 0.005;
+
+    const setupPhase4 = () => {
+        showPhaseScene('timing');
+        gameStatusEl.textContent = "Fase 4: Pouso Perfeito Ativado!";
+        mainActionButton.classList.add('hidden');
+        timingActionButton.classList.remove('hidden');
+
+        startTime = null;
+        indicatorPosition = 0;
+        
+        animateIndicator();
+    };
+
+    const animateIndicator = (timestamp) => {
+        if (!startTime) startTime = timestamp;
+        const elapsed = timestamp - startTime;
+
+        indicatorPosition = (elapsed * INDICATOR_SPEED) % 2;
+        let currentPos = indicatorPosition <= 1 ? indicatorPosition : 2 - indicatorPosition;
+
+        indicatorEl.style.left = `${currentPos * 90}%`;
+        
+        if (gameActive && currentPhase === 4) {
+            indicatorAnimation = requestAnimationFrame(animateIndicator);
+        }
+    };
+
+    const handleTimingAction = () => {
+        if (currentPhase !== 4 || !gameActive) return;
+        
+        cancelAnimationFrame(indicatorAnimation);
+        
+        const barWidth = indicatorEl.parentElement.offsetWidth;
+        const safeZoneStart = barWidth * 0.4;
+        const safeZoneEnd = barWidth * 0.6;
+        const indicatorX = indicatorEl.offsetLeft;
+        
+        timingActionButton.classList.add('hidden');
+
+        if (indicatorX >= safeZoneStart && indicatorX <= safeZoneEnd) {
+            currentScore += SCORE_PER_ACTION * 2;
+            showMessage("Pouso Perfeito! Missão Concluída!", false);
+            setTimeout(() => endGame(true), 2000);
+        } else {
+            showMessage("❌ ERRO! Você saiu antes ou depois da hora! Missão falhou!", true);
+            setTimeout(() => endGame(false), 2000);
+        }
+    };
+
+    timingActionButton.addEventListener('click', handleTimingAction);
+
+
+    // --- LISTENERS DE AÇÃO ---
+    
+    // Listener do Botão Principal (multifuncional)
+    mainActionButton.addEventListener('click', () => {
+        if (!gameActive) {
+            startGame();
+        } else if (currentPhase === 2) {
+            attemptCrossing();
+        }
+    });
+
+    // --- INICIALIZAÇÃO GERAL ---
+    window.onload = () => {
+        // Configuração inicial do Firebase
+        initFirebase();
+        
+        // Configuração visual inicial
+        updateUI();
+    };
+</script>
+
+</body>
+</html>
