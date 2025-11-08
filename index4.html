@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Missão Van Escolar</title>
+    <!-- Tailwind CSS (Aesthetic Styling) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase (for Auth and High Score Persistence) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"></script>
+    <!-- Tone.js (for Sound Generation) -->
+    <script src="https://cdn.jsdelivr.net/npm/tone@14.7.58/build/Tone.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f4f8;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        .game-container {
+            max-width: 600px; /* Reduzindo um pouco para foco mobile */
+            width: 100%;
+            background-color: #ffffff;
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+            overflow: hidden;
+            border: 6px solid #3b82f6;
+        }
+        .van-view {
+            background-color: #add8e6;
+            background-image: linear-gradient(to bottom, #add8e6, #87ceeb);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            min-height: 450px;
+        }
+        .seat {
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            position: relative;
+            border: 3px solid #60a5fa;
+            background-color: #dbeafe;
+            border-radius: 12px;
+            width: 65px; /* Ajuste para melhor visualização */
+            height: 75px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .seat:hover:not(.corrected):not(.bad-behavior) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+        }
+        .seat.pulsing {
+            animation: pulse-yellow 1s infinite alternate;
+        }
+        .seat.bad-behavior {
+            border-color: #ef4444;
+            background-color: #fecaca;
+            animation: bounce 0.5s infinite alternate;
+        }
+        @keyframes pulse-yellow {
+            from { box-shadow: 0 0 0 0 rgba(253, 224, 71, 0.7); }
+            to { box-shadow: 0 0 10px 10px rgba(253, 224, 71, 0); }
+        }
+        @keyframes bounce {
+            from { transform: translateY(0); }
+            to { transform: translateY(-5px); }
+        }
+        .seat-belt {
+            position: absolute;
+            width: 80px;
+            height: 5px;
+            background-color: #10b981;
+            transform-origin: top left;
+            transform: rotate(-35deg) translateY(-20px) translateX(20px);
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .student {
+            font-size: 36px; /* Ajuste do tamanho do emoji */
+            line-height: 1;
+        }
+
+        .traffic-light {
+            width: 50px;
+            height: 140px;
+            background-color: #333;
+            border-radius: 10px;
+            padding: 5px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+        }
+        .light {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: #222;
+            opacity: 0.2;
+            transition: opacity 0.3s;
+            border: 2px solid #555;
+        }
+        .light.red { background-color: #ef4444; opacity: 1; }
+        .light.yellow { background-color: #facc15; opacity: 1; }
+        .light.green { background-color: #10b981; opacity: 1; }
+
+        .landing-bar-container {
+            width: 90%;
+            height: 35px;
+            background-color: #e5e7eb;
+            border-radius: 18px;
+            overflow: hidden;
+            position: relative;
+            margin-top: 30px;
+            border: 2px solid #9ca3af;
+        }
+        .safe-zone {
+            position: absolute;
+            top: 0;
+            left: 35%;
+            width: 30%;
+            height: 100%;
+            background-color: rgba(16, 185, 129, 0.3);
+            border-left: 3px dashed #10b981;
+            border-right: 3px dashed #10b981;
+            box-sizing: border-box;
+        }
+        .indicator {
+            width: 15px;
+            height: 100%;
+            background-color: #ef4444;
+            border-radius: 50%;
+            position: absolute;
+            top: 0;
+            transform: translateX(-50%); /* Centraliza o indicador no ponto de 'left' */
+            transition: background-color 0.3s;
+        }
+        .indicator.success { background-color: #22c55e; }
+
+        .instruction-modal {
+            position: fixed; /* Usa fixed para cobrir toda a tela independente da rolagem */
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+        }
+        .instruction-box {
+            background-color: #fff;
+            padding: 28px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            max-width: 90%;
+            width: 380px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <div id="game" class="game-container">
+        <div class="van-view relative">
+
+            <!-- Informações de Status -->
+            <div class="w-full flex justify-between items-center mb-6">
+                <span id="phase-display" class="text-lg font-bold text-blue-700 bg-blue-100 p-2 rounded-xl shadow-inner">Fase 0: Preparação</span>
+                <span id="score-display" class="text-2xl font-extrabold text-gray-800">Pontos: 0</span>
+            </div>
+            
+            <!-- Linha da Van - Motorista e Professora -->
+            <div class="flex justify-between w-full max-w-xs mb-8">
+                <div class="text-6xl" title="Motorista">🧑‍✈️</div>
+                <div class="text-6xl" title="Professora">👩‍🏫</div>
+            </div>
+
+            <!-- Visualização da Fase 1 (Cintos) e 3 (Comportamento) -->
+            <div id="phase-1-3-view" class="flex justify-around w-full max-w-sm space-x-4">
+                <!-- Assento 1 -->
+                <div class="seat" data-seat="1" onclick="handleSeatClick(1)">
+                    <span class="student" id="student-1">👧</span>
+                    <div class="seat-belt hidden"></div>
+                </div>
+                <!-- Assento 2 -->
+                <div class="seat" data-seat="2" onclick="handleSeatClick(2)">
+                    <span class="student" id="student-2">🧑</span>
+                    <div class="seat-belt hidden"></div>
+                </div>
+                <!-- Assento 3 -->
+                <div class="seat" data-seat="3" onclick="handleSeatClick(3)">
+                    <span class="student" id="student-3">👧</span>
+                    <div class="seat-belt hidden"></div>
+                </div>
+                <!-- Assento 4 -->
+                <div class="seat" data-seat="4" onclick="handleSeatClick(4)">
+                    <span class="student" id="student-4">🧑</span>
+                    <div class="seat-belt hidden"></div>
+                </div>
+            </div>
+            
+            <!-- Componente Semáforo (Fase 2) -->
+            <div id="traffic-light-component" class="traffic-light hidden">
+                <div id="red-light" class="light red"></div>
+                <div id="yellow-light" class="light"></div>
+                <div id="green-light" class="light"></div>
+            </div>
+
+            <!-- Componente Barra de Desembarque (Fase 4) -->
+            <div id="landing-bar-component" class="landing-bar-container hidden">
+                <div class="safe-zone"></div>
+                <div id="indicator" class="indicator"></div>
+            </div>
+            
+            <!-- Mensagem de Tempo/Erros -->
+            <div class="mt-8 text-center">
+                <p id="timer-display" class="text-4xl font-extrabold text-red-600 font-mono">--:--</p>
+                <p id="error-display" class="text-xl font-semibold text-orange-600 mt-2 hidden">Erros: 0/3</p>
+            </div>
+            
+            <!-- Área de Botões de Ação -->
+            <div class="mt-8 w-full flex justify-center space-x-4">
+                <button id="main-action-button" onclick="handleActionClick()" 
+                        class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-full shadow-lg transition duration-200 transform hover:scale-105">
+                    Iniciar Missão
+                </button>
+            </div>
+            
+        </div>
+        
+        <!-- Tela Final/Recorde -->
+        <div id="end-screen" class="p-8 text-center bg-white hidden">
+            <h2 id="final-message" class="text-3xl font-black text-green-700 mb-4"></h2>
+            <p id="final-score" class="text-2xl mb-2">Pontuação Final: <span class="font-black text-blue-600">0</span></p>
+            <p id="high-score" class="text-xl text-yellow-600 mb-6">Seu Recorde: <span class="font-black">0</span></p>
+            <button onclick="window.location.reload()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-full shadow-lg transition duration-200">
+                Jogar Novamente
+            </button>
+        </div>
+
+        <!-- Exibição do User ID e Aviso -->
+        <div class="p-3 bg-gray-100 text-xs text-gray-500 text-center border-t border-gray-200">
+            <p>ID do Usuário (Para Rastreio): <span id="user-id" class="font-mono text-gray-700">Carregando...</span></p>
+            <p id="firestore-notice">A pontuação é salva no banco de dados para rastreamento (SCORM/Moodle).</p>
+        </div>
+        
+    </div>
+
+    <!-- Modal de Instruções -->
+    <div id="instruction-modal" class="instruction-modal hidden">
+        <div class="instruction-box">
+            <h3 id="modal-title" class="text-2xl font-extrabold text-blue-600 mb-3">Título</h3>
+            <p id="modal-text" class="text-md text-gray-700 mb-4"></p>
+            <button id="modal-button" onclick="hideInstructions()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-6 rounded-full transition duration-200 transform hover:scale-105">
+                Manda Ver!
+            </button>
+        </div>
+    </div>
+
+    <script type="module">
+        // --- Firebase Imports ---
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        
+        // --- Configurações Firebase & SCORM ---
+        let db = null;
+        let auth = null;
+        let isFirebaseActive = false;
+        let userId = 'anon';
+        let isAuthReady = false;
+        let isSCORMInitialized = false;
+        let API = null; // SCORM API handle
+
+        // --- Variáveis do Jogo ---
+        let currentPhase = 0;
+        let score = 0;
+        let highScore = 0;
+        let timerInterval = null;
+        let animationFrameId = null;
+        let audioInitialized = false;
+        
+        const SEAT_COUNT = 4;
+        const PHASE1_TIME = 15; // segundos
+        const SAFE_ZONE_START = 35;
+        const SAFE_ZONE_END = 65;
+
+        let beltsFastened = 0;
+        let trafficLightState = 0;
+        let phase2Timer = null;
+        let behaviorErrors = 0;
+        let phase3TimeLeft = 10;
+        let studentCorrectionTimeout = null;
+        let indicatorPosition = 0;
+        let indicatorDirection = 1;
+
+        // --- Configuração de Áudio (Tone.js) ---
+        let synth, successNoise, errorNoise;
+
+        function initializeAudio() {
+            if (audioInitialized) return;
+            try {
+                // Initialize Tone.js context
+                if (Tone.context.state !== 'running') { Tone.context.resume(); }
+
+                synth = new Tone.PluckSynth().toDestination();
+                // Short, high-pitch noise for success
+                successNoise = new Tone.NoiseSynth({
+                    noise: { type: 'white' },
+                    envelope: { attack: 0.005, decay: 0.2, sustain: 0.1, release: 0.5 }
+                }).toDestination();
+                // Longer, lower-pitch noise for error
+                errorNoise = new Tone.NoiseSynth({
+                    noise: { type: 'pink' },
+                    envelope: { attack: 0.01, decay: 0.5, sustain: 0.1, release: 1 }
+                }).toDestination();
+                audioInitialized = true;
+            } catch (e) {
+                console.error("Erro ao inicializar áudio (Tone.js):", e);
+            }
+        }
+
+        function playClickSound() {
+            if (!audioInitialized) return;
+            synth.triggerAttackRelease("C5", "16n");
+        }
+        function playSuccessSound() {
+            if (!audioInitialized) return;
+            successNoise.triggerAttackRelease(0.5);
+        }
+        function playErrorSound() {
+            if (!audioInitialized) return;
+            errorNoise.triggerAttackRelease(1);
+        }
+
+        // --- Funções de Controle de UI (Elements) ---
+
+        const elements = {
+            mainButton: document.getElementById('main-action-button'),
+            phaseDisplay: document.getElementById('phase-display'),
+            scoreDisplay: document.getElementById('score-display'),
+            timerDisplay: document.getElementById('timer-display'),
+            errorDisplay: document.getElementById('error-display'),
+            endScreen: document.getElementById('end-screen'),
+            finalMessage: document.getElementById('final-message'),
+            finalScore: document.getElementById('final-score'),
+            highScoreEl: document.getElementById('high-score'),
+            userIdEl: document.getElementById('user-id'),
+            firestoreNotice: document.getElementById('firestore-notice'),
+            phase13View: document.getElementById('phase-1-3-view'),
+            trafficLightComp: document.getElementById('traffic-light-component'),
+            landingBarComp: document.getElementById('landing-bar-component'),
+            indicator: document.getElementById('indicator'),
+            modal: document.getElementById('instruction-modal'),
+            modalTitle: document.getElementById('modal-title'),
+            modalText: document.getElementById('modal-text')
+        };
+
+        function updateScoreDisplay() {
+            elements.scoreDisplay.textContent = `Pontos: ${score}`;
+            elements.highScoreEl.querySelector('span').textContent = highScore;
+            if (!isFirebaseActive) {
+                // Remove score saving message if not active
+                elements.highScoreEl.closest('p').textContent = 'Recorde: (Apenas local)';
+            }
+        }
+
+        function showInstructions(title, text) {
+            elements.modalTitle.textContent = title;
+            elements.modalText.textContent = text;
+            elements.modal.classList.remove('hidden');
+            elements.mainButton.disabled = true;
+        }
+
+        window.hideInstructions = function() {
+            playClickSound();
+            elements.modal.classList.add('hidden');
+            elements.mainButton.disabled = false;
+            // Inicia a fase após fechar as instruções
+            if (currentPhase === 1) startPhase1();
+            if (currentPhase === 2) startPhase2();
+            if (currentPhase === 3) startPhase3();
+            if (currentPhase === 4) startPhase4();
+        }
+
+        function resetGame() {
+            // Limpa timers e animações
+            clearInterval(timerInterval);
+            cancelAnimationFrame(animationFrameId);
+            clearTimeout(phase2Timer);
+            clearTimeout(studentCorrectionTimeout);
+
+            currentPhase = 0;
+            score = 0;
+            beltsFastened = 0;
+            behaviorErrors = 0;
+            trafficLightState = 0;
+            indicatorPosition = 0;
+
+            // Esconde todas as visualizações específicas
+            elements.mainButton.classList.remove('hidden');
+            elements.mainButton.textContent = 'Iniciar Missão';
+            elements.phaseDisplay.textContent = 'Fase 0: Preparação';
+            elements.timerDisplay.textContent = '--:--';
+            elements.errorDisplay.classList.add('hidden');
+            elements.endScreen.classList.add('hidden');
+
+            elements.phase13View.classList.remove('hidden');
+            elements.trafficLightComp.classList.add('hidden');
+            elements.landingBarComp.classList.add('hidden');
+            
+            // Reset Seats
+            document.querySelectorAll('.seat').forEach(seat => {
+                seat.classList.remove('pulsing', 'corrected', 'bad-behavior');
+                seat.querySelector('.seat-belt').classList.add('hidden');
+                // Reset student emoji
+                const seatId = parseInt(seat.dataset.seat);
+                seat.querySelector('.student').textContent = seatId % 2 === 0 ? '🧑' : '👧';
+            });
+            updateScoreDisplay();
+        }
+
+        // --- Funções de Persistência (Firebase) ---
+
+        async function saveHighScore(newScore) {
+            if (!isFirebaseActive || !isAuthReady || newScore <= highScore) return;
+
+            highScore = newScore;
+            updateScoreDisplay();
+
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            // Path: /artifacts/{appId}/users/{userId}/scores/highscore
+            const userRef = doc(db, `artifacts/${appId}/users/${userId}/scores/highscore`);
+            try {
+                // setDoc with merge: true ensures the document exists and only updates the score
+                await setDoc(userRef, { score: newScore, date: new Date().toISOString() }, { merge: true });
+                console.log("High score saved successfully.");
+            } catch (error) {
+                console.error("Error saving high score:", error);
+            }
+        }
+
+        async function loadHighScore() {
+            if (!isFirebaseActive || !isAuthReady) return;
+
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            const userRef = doc(db, `artifacts/${appId}/users/${userId}/scores/highscore`);
+            try {
+                const docSnap = await getDoc(userRef);
+                if (docSnap.exists()) {
+                    highScore = docSnap.data().score || 0;
+                    updateScoreDisplay();
+                    console.log("High score loaded:", highScore);
+                }
+            } catch (error) {
+                console.error("Error loading high score:", error);
+            }
+        }
+
+        // --- Lógica SCORM (Adaptada) ---
+
+        function findAPI(win) {
+            let limit = 10;
+            while ((!win.API && win.parent && (win.parent !== win) && (limit-- > 0))) {
+                try {
+                    if (win.parent.API) {
+                        win.API = win.parent.API;
+                    } else {
+                        win = win.parent;
+                    }
+                } catch (e) {
+                    return null; // Cross-origin block
+                }
+            }
+            return win.API;
+        }
+
+        function SCORM_Initialize() {
+            if (!isFirebaseActive) return;
+            API = findAPI(window);
+            if (API) {
+                const result = API.LMSInitialize("");
+                isSCORMInitialized = (result === "true" || result === "1");
+                if (isSCORMInitialized) {
+                    console.log("SCORM Initialized.");
+                } else {
+                    console.error("SCORM Initialization failed.");
+                }
+            } else {
+                console.warn("SCORM API not found.");
+            }
+        }
+
+        function SCORM_SetStatus(status) {
+            if (isFirebaseActive && isSCORMInitialized && API) {
+                API.LMSSetValue("cmi.core.lesson_status", status);
+                API.LMSCommit("");
+            }
+        }
+
+        function SCORM_SetScore(rawScore) {
+            if (isFirebaseActive && isSCORMInitialized && API) {
+                API.LMSSetValue("cmi.core.score.raw", String(rawScore));
+                API.LMSCommit("");
+            }
+        }
+
+        // --- Controle de Fases e Jogo ---
+
+        function advancePhase() {
+            currentPhase++;
+            if (currentPhase > 4) {
+                endGame(true, "PARABÉNS! Missão concluída com sucesso!");
+                SCORM_SetStatus("completed");
+                SCORM_SetScore(score);
+                saveHighScore(score);
+            } else {
+                elements.mainButton.classList.remove('hidden');
+                elements.mainButton.textContent = `Iniciar Fase ${currentPhase}`;
+                elements.phaseDisplay.textContent = `Fase ${currentPhase}`;
+
+                // Esconder/resetar elementos específicos
+                elements.trafficLightComp.classList.add('hidden');
+                elements.landingBarComp.classList.add('hidden');
+                elements.errorDisplay.classList.add('hidden');
+                elements.timerDisplay.textContent = '--:--';
+                
+                // Mostrar a vista da van por padrão, a menos que a fase 2 ou 4 esteja ativa
+                elements.phase13View.classList.remove('hidden');
+
+                let title, text;
+                switch (currentPhase) {
+                    case 1:
+                        title = "Fase 1: Preparar a Viagem 🚦";
+                        text = `É hora de partir! Toque rapidamente nos 4 assentos para afivelar o cinto de segurança dos seus amigos antes que os ${PHASE1_TIME} segundos acabem.`;
+                        break;
+                    case 2:
+                        title = "Fase 2: Subida Segura 횡단보도";
+                        text = "A van parou! Clique em 'Atravessar Agora!' SOMENTE quando o semáforo estiver VERDE. Se errar, a missão falha.";
+                        elements.phase13View.classList.add('hidden'); // Esconde assentos
+                        break;
+                    case 3:
+                        title = "Fase 3: Comportamento na Van 🤫";
+                        text = "Durante a viagem, corrija o mau comportamento (😡) tocando no aluno rapidamente. Você tem 10 segundos e só pode cometer 3 erros!";
+                        break;
+                    case 4:
+                        title = "Fase 4: Chegada à Escola 🛑";
+                        text = "Clique em 'DESCER!' quando o indicador estiver exatamente na 'Zona Segura' (verde) da barra. Precisão é a chave para o desembarque seguro!";
+                        elements.phase13View.classList.add('hidden'); // Esconde assentos
+                        break;
+                }
+                showInstructions(title, text);
+            }
+        }
+
+        function endGame(success, message) {
+            // Limpa tudo
+            clearInterval(timerInterval);
+            cancelAnimationFrame(animationFrameId);
+            clearTimeout(phase2Timer);
+            clearTimeout(studentCorrectionTimeout);
+
+            if (!success) {
+                playErrorSound();
+                score = 0; // Zera a pontuação em caso de falha de segurança
+                SCORM_SetStatus("failed");
+                SCORM_SetScore(0);
+                elements.finalMessage.classList.remove('text-green-700');
+                elements.finalMessage.classList.add('text-red-700');
+            } else {
+                playSuccessSound();
+                elements.finalMessage.classList.remove('text-red-700');
+                elements.finalMessage.classList.add('text-green-700');
+            }
+
+            elements.phaseDisplay.textContent = 'FIM DA MISSÃO';
+            elements.timerDisplay.textContent = 'ENCERRADO';
+            elements.mainButton.classList.add('hidden');
+            elements.phase13View.classList.add('hidden');
+            elements.trafficLightComp.classList.add('hidden');
+            elements.landingBarComp.classList.add('hidden');
+            elements.errorDisplay.classList.add('hidden');
+
+            elements.finalMessage.textContent = message;
+            elements.finalScore.querySelector('span').textContent = score;
+            elements.endScreen.classList.remove('hidden');
+
+            updateScoreDisplay();
+        }
+
+        window.handleActionClick = function() {
+            // Inicializa áudio no primeiro clique do usuário
+            initializeAudio();  
+            playClickSound();
+            elements.mainButton.classList.add('hidden');
+
+            if (currentPhase === 0) {
+                resetGame();
+                advancePhase(); // Go to Phase 1 Instructions
+            } else if (currentPhase === 2) {
+                handlePhase2Action();
+            } else if (currentPhase === 4) {
+                handlePhase4Action();
+            }
+        }
+
+        // --- FASE 1: Cinto de Segurança ---
+
+        function startPhase1() {
+            beltsFastened = 0;
+            let time = PHASE1_TIME;
+            elements.timerDisplay.textContent = `00:${time.toString().padStart(2, '0')}`;
+            
+            document.querySelectorAll('.seat').forEach(seat => {
+                seat.classList.add('pulsing'); // Indica que precisa de interação
+                seat.classList.remove('corrected');
+                seat.querySelector('.seat-belt').classList.add('hidden');
+            });
+
+            timerInterval = setInterval(() => {
+                time--;
+                elements.timerDisplay.textContent = `00:${time.toString().padStart(2, '0')}`;
+                if (time <= 0) {
+                    clearInterval(timerInterval);
+                    if (beltsFastened < SEAT_COUNT) {
+                        endGame(false, "TEMPO ESGOTADO! Não foi possível garantir a segurança.");
+                    }
+                }
+            }, 1000);
+        }
+
+        window.handleSeatClick = function(seatId) {
+            playClickSound();
+            const seatEl = document.querySelector(`[data-seat="${seatId}"]`);
+
+            if (currentPhase === 1) {
+                if (!seatEl.classList.contains('corrected')) {
+                    seatEl.classList.add('corrected');
+                    seatEl.classList.remove('pulsing');
+                    seatEl.querySelector('.seat-belt').classList.remove('hidden');
+                    
+                    beltsFastened++;
+                    score += 100;
+                    updateScoreDisplay();
+
+                    if (beltsFastened === SEAT_COUNT) {
+                        clearInterval(timerInterval);
+                        playSuccessSound();
+                        setTimeout(advancePhase, 500);
+                    }
+                }
+            } else if (currentPhase === 3) {
+                handleBehaviorCorrection(seatId);
+            }
+        }
+
+        // --- FASE 2: Semáforo ---
+        
+        function startPhase2() {
+            elements.trafficLightComp.classList.remove('hidden');
+            elements.mainButton.textContent = 'Atravessar Agora!';
+            elements.mainButton.classList.remove('hidden');
+
+            updateTrafficLight(0); // Começa Vermelho
+            
+            // Ciclo de mudança de luzes
+            const cycleTimes = [3000, 1500, 4000]; // Red, Yellow, Green (in ms)
+            let currentStateIndex = 0;
+
+            function cycleLight() {
+                // Atualiza para o próximo estado (Red=0, Yellow=1, Green=2)
+                currentStateIndex = (currentStateIndex + 1) % 3;
+                updateTrafficLight(currentStateIndex);
+
+                const nextTime = cycleTimes[currentStateIndex];
+                phase2Timer = setTimeout(cycleLight, nextTime);
+            }
+
+            phase2Timer = setTimeout(cycleLight, cycleTimes[currentStateIndex]); // Start the cycle
+        }
+
+        function updateTrafficLight(state) {
+            trafficLightState = state;
+            document.getElementById('red-light').classList.toggle('red', state === 0);
+            document.getElementById('yellow-light').classList.toggle('yellow', state === 1);
+            document.getElementById('green-light').classList.toggle('green', state === 2);
+        }
+
+        function handlePhase2Action() {
+            clearTimeout(phase2Timer);
+            if (trafficLightState === 2) { // Green
+                score += 300;
+                updateScoreDisplay();
+                playSuccessSound();
+                setTimeout(advancePhase, 500);
+            } else {
+                endGame(false, "ERRO! Você tentou atravessar no sinal vermelho ou amarelo!");
+            }
+        }
+
+        // --- FASE 3: Comportamento na Van ---
+
+        function startPhase3() {
+            behaviorErrors = 0;
+            phase3TimeLeft = 10;
+            
+            elements.errorDisplay.classList.remove('hidden');
+            elements.errorDisplay.textContent = `Erros: ${behaviorErrors}/3`;
+            elements.mainButton.classList.add('hidden'); // Sem botão de ação
+
+            // Start main timer
+            timerInterval = setInterval(() => {
+                phase3TimeLeft--;
+                elements.timerDisplay.textContent = `00:${phase3TimeLeft.toString().padStart(2, '0')}`;
+                if (phase3TimeLeft <= 0) {
+                    clearInterval(timerInterval);
+                    clearTimeout(studentCorrectionTimeout);
+                    playSuccessSound();
+                    advancePhase();
+                }
+            }, 1000);
+
+            // Start bad behavior generator
+            studentCorrectionTimeout = setTimeout(generateBadBehavior, 2000);
+        }
+
+        function generateBadBehavior() {
+            if (currentPhase !== 3 || phase3TimeLeft <= 0) return;
+
+            const seats = Array.from(document.querySelectorAll('.seat'));
+            const availableSeats = seats.filter(seat => !seat.classList.contains('bad-behavior'));
+
+            if (availableSeats.length > 0) {
+                const seatEl = availableSeats[Math.floor(Math.random() * availableSeats.length)];
+                const studentId = parseInt(seatEl.dataset.seat);
+                const studentEl = document.getElementById(`student-${studentId}`);
+
+                seatEl.classList.add('bad-behavior');
+                studentEl.textContent = '😡';
+                
+                // Tempo limite para correção
+                const correctionTimeout = 1500; 
+
+                // Set timeout for missed correction
+                setTimeout(() => {
+                    if (seatEl.classList.contains('bad-behavior')) {
+                        // Correction missed!
+                        playErrorSound();
+                        behaviorErrors++;
+                        elements.errorDisplay.textContent = `Erros: ${behaviorErrors}/3`;
+                        resetStudentState(studentId);
+                        
+                        if (behaviorErrors >= 3) {
+                            endGame(false, "MUITO BARULHO! O limite de erros foi atingido.");
+                            return;
+                        }
+                    }
+                    // Schedule next behavior (faster if time is running out)
+                    const nextBehaviorTime = Math.random() * 2000 + 1000;
+                    studentCorrectionTimeout = setTimeout(generateBadBehavior, nextBehaviorTime);
+                }, correctionTimeout); 
+            } else {
+                // If all seats are misbehaving, check again soon
+                studentCorrectionTimeout = setTimeout(generateBadBehavior, 500);
+            }
+        }
+
+        window.handleBehaviorCorrection = function(seatId) {
+            playClickSound();
+            const seatEl = document.querySelector(`[data-seat="${seatId}"]`);
+            if (seatEl.classList.contains('bad-behavior')) {
+                resetStudentState(seatId);
+                score += 200;
+                updateScoreDisplay();
+                // Schedule next behavior quickly after correction
+                clearTimeout(studentCorrectionTimeout);
+                studentCorrectionTimeout = setTimeout(generateBadBehavior, 500);
+            }
+        }
+
+        function resetStudentState(studentId) {
+            const studentEl = document.getElementById(`student-${studentId}`);
+            const seatEl = document.querySelector(`[data-seat="${studentId}"]`);
+            seatEl.classList.remove('bad-behavior');
+            studentEl.textContent = studentId % 2 === 0 ? '🧑' : '👧';
+        }
+
+        // --- FASE 4: Desembarque Seguro ---
+
+        function startPhase4() {
+            elements.landingBarComp.classList.remove('hidden');
+            elements.mainButton.textContent = 'DESCER!';
+            elements.mainButton.classList.remove('hidden');
+            
+            indicatorPosition = 0;
+            indicatorDirection = 1;
+            elements.indicator.style.left = '0%';
+            elements.indicator.classList.remove('success');
+            
+            animateLandingBar();
+        }
+
+        function animateLandingBar() {
+            if (currentPhase !== 4) return;
+
+            // Velocidade
+            indicatorPosition += indicatorDirection * 1.5; 
+
+            // Bounds check (0 to 100)
+            if (indicatorPosition >= 100) {
+                indicatorDirection = -1;
+                indicatorPosition = 100;
+            } else if (indicatorPosition <= 0) {
+                indicatorDirection = 1;
+                indicatorPosition = 0;
+            }
+
+            elements.indicator.style.left = `${indicatorPosition}%`;
+
+            animationFrameId = requestAnimationFrame(animateLandingBar);
+        }
+
+        function handlePhase4Action() {
+            cancelAnimationFrame(animationFrameId);
+            
+            // Verifica se o indicador está na zona segura (35% a 65%)
+            if (indicatorPosition >= SAFE_ZONE_START && indicatorPosition <= SAFE_ZONE_END) {
+                score += 500;
+                updateScoreDisplay();
+                playSuccessSound();
+                elements.indicator.classList.add('success');
+                setTimeout(advancePhase, 1000);
+            } else {
+                endGame(false, "PERIGO! Você desceu antes da van parar completamente.");
+            }
+        }
+
+        // --- Inicialização (Modo Dual) ---
+
+        async function initialize() {
+            // Verifica se as variáveis de ambiente existem para ativar Firebase/SCORM
+            const hasExternalConfig = typeof __firebase_config !== 'undefined' && __firebase_config;
+
+            if (hasExternalConfig) {
+                isFirebaseActive = true;
+                
+                try {
+                    const firebaseConfig = JSON.parse(__firebase_config);
+                    const appInstance = initializeApp(firebaseConfig);
+                    
+                    db = getFirestore(appInstance);
+                    auth = getAuth(appInstance);
+
+                    // Tenta autenticar com token personalizado, fallback para anônimo
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                    
+                    onAuthStateChanged(auth, async (user) => {
+                        if (user) {
+                            userId = user.uid;
+                            elements.userIdEl.textContent = userId;
+                            await loadHighScore();
+                        } else {
+                            userId = 'anonymous'; // Fallback
+                            elements.userIdEl.textContent = userId;
+                        }
+                        isAuthReady = true;
+                        SCORM_Initialize(); // Initialize SCORM only after Firebase Auth is ready
+                        resetGame();
+                    });
+
+                } catch (error) {
+                    console.error("ERRO FATAL: Falha ao inicializar Firebase. Desativando persistência.", error);
+                    isFirebaseActive = false; // Disable persistence if setup fails
+                }
+            }
+            
+            if (!isFirebaseActive) {
+                // MODO 2: Standalone - Fallback
+                console.warn("Rodando em modo Standalone. Rastreamento SCORM e recordes Firebase desativados.");
+                elements.userIdEl.textContent = 'Standalone (Local)';
+                elements.firestoreNotice.textContent = 'Modo Local: A pontuação é zerada ao fechar o jogo.';
+                isAuthReady = true; 
+                resetGame();
+            }
+        }
+
+        window.onload = initialize;
+
+    </script>
+</body>
+</html>
