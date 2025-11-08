@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Missão Van Escolar — Standalone (Corrigido)</title>
+
+    <!-- Tailwind CDN (apenas para utilitários) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Tone.js (sons) -->
+    <script src="https://cdn.jsdelivr.net/npm/tone@14.7.58/build/Tone.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+        :root { --primary:#3b82f6; --green:#10b981; --red:#ef4444; --yellow:#facc15; }
+        body { font-family: 'Inter', sans-serif; background:#f0f4f8; margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+        .game-container { width:100%; max-width:880px; background:#fff; border-radius:18px; border:4px solid var(--primary); box-shadow:0 10px 30px rgba(0,0,0,0.08); overflow:hidden; }
+        .van-view { padding:22px; background: linear-gradient(to bottom, #add8e6, #87ceeb); min-height:460px; position:relative; display:flex; flex-direction:column; align-items:center; }
+        .phase-head { width:100%; display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+        .seat { cursor:pointer; width:80px; height:90px; border-radius:10px; border:2px solid #60a5fa; background:#dbeafe; display:flex; align-items:center; justify-content:center; flex-direction:column; transition: transform .18s, box-shadow .18s; position:relative; }
+        .seat:hover { transform:translateY(-4px); box-shadow:0 8px 18px rgba(0,0,0,0.14); }
+        .seat.pulsing { animation: pulse-yellow 1s infinite alternate; }
+        @keyframes pulse-yellow { from { box-shadow:0 0 0 0 rgba(253,224,71,0.6)} to { box-shadow:0 0 8px 8px rgba(253,224,71,0)}}
+        .seat-belt { position:absolute; width:80px; height:6px; background:var(--green); transform-origin:top left; transform:rotate(-35deg) translateY(-22px) translateX(20px); border-radius:5px; box-shadow:0 2px 5px rgba(0,0,0,0.25); pointer-events:none; opacity:0; transition: opacity .35s, transform .35s; z-index:10; }
+        .seat-belt.visible { opacity:1; transform:rotate(-35deg) translateY(-18px) translateX(20px); }
+        .student { font-size:40px; line-height:1; }
+        .traffic-light { width:56px; height:150px; background:#222; border-radius:12px; padding:8px; display:flex; flex-direction:column; justify-content:space-around; position:absolute; top:22px; right:22px; box-shadow:0 6px 20px rgba(0,0,0,0.25); }
+        .light { width:44px; height:44px; border-radius:50%; background:#111; opacity:0.25; transition: opacity .22s, transform .22s; box-shadow: inset 0 -4px 8px rgba(0,0,0,0.25); }
+        .light.red { background: var(--red); }
+        .light.yellow { background: var(--yellow); }
+        .light.green { background: var(--green); }
+        .light.on { opacity:1; transform: scale(1.06); box-shadow: 0 6px 20px rgba(0,0,0,0.18), 0 0 18px rgba(255,255,255,0.06) inset; }
+        .landing-bar-container { width:80%; height:34px; background:#e5e7eb; border-radius:18px; overflow:hidden; position:relative; margin-top:18px; }
+        .safe-zone { position:absolute; left:35%; top:0; width:30%; height:100%; background: rgba(16,185,129,0.22); border-left:2px dashed var(--green); border-right:2px dashed var(--green); }
+        .indicator { position:absolute; left:0%; top:0; height:100%; width:18px; border-radius:50%; background:var(--red); transition:left .04s linear; }
+        .indicator.success { background:#22c55e; }
+        .instruction-modal { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.56); opacity:0; pointer-events:none; transition: opacity .32s ease; z-index:80; }
+        .instruction-modal.show { opacity:1; pointer-events:auto; }
+        .instruction-box { background:#fff; padding:26px; border-radius:14px; max-width:360px; width:92%; text-align:center; transform:translateY(12px); transition: transform .32s ease; box-shadow:0 14px 40px rgba(0,0,0,0.28); }
+        .instruction-modal.show .instruction-box { transform: translateY(0); }
+        .timer-animate { display:inline-block; transition: transform .18s ease; }
+        .timer-animate.tick { transform: scale(1.06); }
+        .hidden { display:none; }
+        .btn { background:var(--primary); color:#fff; border:none; padding:12px 20px; border-radius:999px; font-weight:700; box-shadow:0 10px 22px rgba(59,130,246,0.16); cursor:pointer; }
+        .btn:active { transform: translateY(1px); }
+        .end-screen { padding:18px; text-align:center; }
+        .smallnote { padding:10px; background:#f8fafc; text-align:center; font-size:13px; color:#6b7280; }
+        @media (max-width:640px) { .van-view { min-height:560px; } .traffic-light { right:12px; top:12px; } }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="van-view">
+            <div class="phase-head">
+                <span id="phase-display" class="text-lg font-bold text-blue-700 bg-blue-100 p-2 rounded-lg">Fase 0: Preparação</span>
+                <span id="score-display" class="text-xl font-extrabold text-gray-800">Pontos: 0</span>
+            </div>
+
+            <div class="flex justify-between w-full max-w-sm mb-6">
+                <div class="text-6xl" title="Motorista">🧑‍✈️</div>
+                <div class="text-6xl" title="Professora">👩‍🏫</div>
+            </div>
+
+            <!-- Assentos -->
+            <div id="phase-1-3-view" class="flex justify-around w-full max-w-md space-x-4">
+                <div class="seat" data-seat="1" onclick="handleSeatClick(1)">
+                    <span class="student" id="student-1">👧</span>
+                    <div class="seat-belt" aria-hidden="true"></div>
+                </div>
+                <div class="seat" data-seat="2" onclick="handleSeatClick(2)">
+                    <span class="student" id="student-2">🧑</span>
+                    <div class="seat-belt" aria-hidden="true"></div>
+                </div>
+                <div class="seat" data-seat="3" onclick="handleSeatClick(3)">
+                    <span class="student" id="student-3">👧</span>
+                    <div class="seat-belt" aria-hidden="true"></div>
+                </div>
+                <div class="seat" data-seat="4" onclick="handleSeatClick(4)">
+                    <span class="student" id="student-4">🧑</span>
+                    <div class="seat-belt" aria-hidden="true"></div>
+                </div>
+            </div>
+
+            <!-- Semáforo -->
+            <div id="traffic-light-component" class="traffic-light hidden" aria-hidden="true">
+                <div id="red-light" class="light red"></div>
+                <div id="yellow-light" class="light yellow"></div>
+                <div id="green-light" class="light green"></div>
+            </div>
+
+            <!-- Barra desembarque -->
+            <div id="landing-bar-component" class="landing-bar-container hidden" aria-hidden="true">
+                <div class="safe-zone" aria-hidden="true"></div>
+                <div id="indicator" class="indicator" aria-hidden="true"></div>
+            </div>
+
+            <div class="mt-6 text-center">
+                <p id="timer-display" class="text-3xl font-mono text-red-600"><span class="timer-animate">--:--</span></p>
+                <p id="error-display" class="text-lg font-semibold text-orange-600 hidden">Erros: 0/3</p>
+            </div>
+
+            <div class="mt-8 w-full flex justify-center">
+                <button id="main-action-button" onclick="handleActionClick()" class="btn">Iniciar Missão</button>
+            </div>
+        </div>
+
+        <div id="end-screen" class="end-screen hidden">
+            <h2 id="final-message" class="text-3xl font-bold text-green-700 mb-4"></h2>
+            <p id="final-score" class="text-2xl mb-2">Pontuação Final: <span class="font-bold">0</span></p>
+            <p id="high-score" class="text-xl text-yellow-600 mb-6">Seu Recorde: <span class="font-bold">0</span></p>
+            <button onclick="window.location.reload()" class="btn">Jogar Novamente</button>
+        </div>
+
+        <div class="smallnote">
+            <p>ID do Usuário (Local): <span id="user-id">Standalone</span></p>
+            <p id="firestore-notice">Modo Local: pontuação armazenada apenas na sessão atual.</p>
+        </div>
+    </div>
+
+    <!-- Modal instruções -->
+    <div id="instruction-modal" class="instruction-modal" role="dialog" aria-modal="true">
+        <div class="instruction-box">
+            <h3 id="modal-title" class="text-2xl font-extrabold text-blue-600 mb-3">Título</h3>
+            <p id="modal-text" class="text-md text-gray-700 mb-4"></p>
+            <button id="modal-button" onclick="hideInstructions()" class="btn">Manda Ver!</button>
+        </div>
+    </div>
+
+    <script>
+    /* ------------------------------
+       Versão Standalone (corrigida)
+       - Áudio inicializado na primeira interação global
+       - Semáforo com 3 cores (visíveis)
+       - Sons ao clicar nos assentos garantidos
+       ------------------------------ */
+
+    // Estado do jogo
+    let currentPhase = 0;
+    let score = 0;
+    let highScore = 0;
+    let timerInterval = null;
+    let animationFrameId = null;
+
+    // Fase 1
+    const SEAT_COUNT = 4;
+    let beltsFastened = 0;
+    const PHASE1_TIME = 15;
+
+    // Fase 2
+    let trafficLightState = 0; // 0=red,1=yellow,2=green
+    let phase2Timer = null;
+
+    // Fase 3
+    let behaviorErrors = 0;
+    let phase3TimeLeft = 10;
+    let studentCorrectionTimer = null;
+
+    // Fase 4
+    let indicatorPosition = 0;
+    let indicatorDirection = 1;
+    const SAFE_ZONE_START = 35;
+    const SAFE_ZONE_END = 65;
+
+    // Audio (Tone.js)
+    let audioInitialized = false;
+    let synth, successNoise, errorNoise;
+
+    function initializeAudio() {
+        if (audioInitialized) return;
+        try {
+            synth = new Tone.PluckSynth().toDestination();
+            successNoise = new Tone.NoiseSynth({
+                noise: { type: 'white' },
+                envelope: { attack: 0.005, decay: 0.05, sustain: 0.1, release: 0.5 }
+            }).toDestination();
+            errorNoise = new Tone.NoiseSynth({
+                noise: { type: 'pink' },
+                envelope: { attack: 0.01, decay: 0.2, sustain: 0.1, release: 0.5 }
+            }).toDestination();
+            audioInitialized = true;
+            // resume context if needed
+            if (Tone.context && Tone.context.state !== 'running') {
+                Tone.context.resume().catch(()=>{ /* ignore */ });
+            }
+            console.log("Audio initialized");
+        } catch (e) {
+            console.warn("Falha ao inicializar Tone.js:", e);
+        }
+    }
+
+    function playClickSound() {
+        if (!audioInitialized) initializeAudio();
+        if (Tone.context && Tone.context.state !== 'running') { Tone.context.resume(); }
+        try { synth.triggerAttackRelease('C4', '8n'); } catch (e) { /* ignore */ }
+    }
+    function playSuccessSound() {
+        if (!audioInitialized) initializeAudio();
+        if (Tone.context && Tone.context.state !== 'running') { Tone.context.resume(); }
+        try { successNoise.triggerAttackRelease(0.5); } catch (e) { /* ignore */ }
+    }
+    function playErrorSound() {
+        if (!audioInitialized) initializeAudio();
+        if (Tone.context && Tone.context.state !== 'running') { Tone.context.resume(); }
+        try { errorNoise.triggerAttackRelease(1); } catch (e) { /* ignore */ }
+    }
+
+    // Inicializar áudio na PRIMEIRA interação do usuário (qualquer clique)
+    window.addEventListener('click', () => {
+        if (!audioInitialized) {
+            initializeAudio();
+            // resume tonal context (chromium policies)
+            if (Tone.context && Tone.context.resume) Tone.context.resume().catch(()=>{});
+            console.log("Áudio inicializado via interação global (click).");
+        }
+    }, { once: true });
+
+    // Elementos
+    const elements = {
+        mainButton: document.getElementById('main-action-button'),
+        phaseDisplay: document.getElementById('phase-display'),
+        scoreDisplay: document.getElementById('score-display'),
+        timerDisplay: document.getElementById('timer-display'),
+        errorDisplay: document.getElementById('error-display'),
+        endScreen: document.getElementById('end-screen'),
+        finalMessage: document.getElementById('final-message'),
+        finalScore: document.getElementById('final-score'),
+        highScoreEl: document.querySelector('#high-score span'),
+        userIdEl: document.getElementById('user-id'),
+        phase13View: document.getElementById('phase-1-3-view'),
+        trafficLightComp: document.getElementById('traffic-light-component'),
+        landingBarComp: document.getElementById('landing-bar-component'),
+        indicator: document.getElementById('indicator'),
+        modal: document.getElementById('instruction-modal'),
+        modalTitle: document.getElementById('modal-title'),
+        modalText: document.getElementById('modal-text'),
+        modalButton: document.getElementById('modal-button'),
+        timerAnimateSpan: document.querySelector('#timer-display .timer-animate')
+    };
+
+    function updateScoreDisplay() {
+        elements.scoreDisplay.textContent = `Pontos: ${score}`;
+        const hs = document.querySelector('#high-score span');
+        if (hs) hs.textContent = highScore;
+    }
+
+    function showInstructions(title, text) {
+        elements.modalTitle.textContent = title;
+        elements.modalText.textContent = text;
+        elements.modal.classList.add('show');
+        elements.mainButton.disabled = true;
+    }
+
+    function hideInstructions() {
+        playClickSound();
+        elements.modal.classList.remove('show');
+        elements.mainButton.disabled = false;
+        // start the current phase after modal hides (small delay for animation)
+        setTimeout(() => {
+            if (currentPhase === 1) startPhase1();
+            if (currentPhase === 2) startPhase2();
+            if (currentPhase === 3) startPhase3();
+            if (currentPhase === 4) startPhase4();
+        }, 260);
+    }
+
+    function resetGame() {
+        clearInterval(timerInterval);
+        cancelAnimationFrame(animationFrameId);
+        clearInterval(phase2Timer);
+        clearTimeout(studentCorrectionTimer);
+
+        currentPhase = 0;
+        score = 0;
+        beltsFastened = 0;
+        behaviorErrors = 0;
+        trafficLightState = 0;
+        indicatorPosition = 0;
+
+        elements.mainButton.classList.remove('hidden');
+        elements.mainButton.textContent = 'Iniciar Missão';
+        elements.phaseDisplay.textContent = 'Fase 0: Preparação';
+        if (elements.timerAnimateSpan) elements.timerAnimateSpan.textContent = '--:--';
+        elements.errorDisplay.classList.add('hidden');
+        elements.endScreen.classList.add('hidden');
+
+        elements.phase13View.classList.remove('hidden');
+        elements.trafficLightComp.classList.add('hidden');
+        elements.landingBarComp.classList.add('hidden');
+
+        // Reset seats
+        document.querySelectorAll('.seat').forEach(seat => {
+            seat.classList.remove('pulsing', 'corrected', 'bad-behavior');
+            const belt = seat.querySelector('.seat-belt');
+            if (belt) belt.classList.remove('visible');
+            const student = seat.querySelector('.student');
+            if (student) student.textContent = (parseInt(seat.dataset.seat) % 2 === 0) ? '🧑' : '👧';
+        });
+
+        // Reset lights
+        document.querySelectorAll('.light').forEach(l => l.classList.remove('on'));
+
+        updateScoreDisplay();
+    }
+
+    function advancePhase() {
+        currentPhase++;
+        if (currentPhase > 4) {
+            endGame(true, "PARABÉNS! Missão concluída com sucesso!");
+            return;
+        }
+
+        elements.mainButton.classList.remove('hidden');
+        elements.mainButton.textContent = `Iniciar Fase ${currentPhase}`;
+        elements.phaseDisplay.textContent = `Fase ${currentPhase}`;
+
+        // Hide phase components
+        elements.trafficLightComp.classList.add('hidden');
+        elements.landingBarComp.classList.add('hidden');
+        elements.errorDisplay.classList.add('hidden');
+        if (elements.timerAnimateSpan) elements.timerAnimateSpan.textContent = '--:--';
+        elements.phase13View.style.justifyContent = 'center';
+
+        // show instructions
+        let title = '', text = '';
+        switch (currentPhase) {
+            case 1:
+                title = "Fase 1: Preparar a Viagem 🚦";
+                text = "Toque rapidamente em cada um dos 4 assentos para afivelar o cinto de segurança antes que o tempo acabe.";
+                break;
+            case 2:
+                title = "Fase 2: Semáforo";
+                text = "Atenção ao semáforo à direita — clique em 'Atravessar Agora!' somente quando a LUZ ESTIVER VERDE.";
+                break;
+            case 3:
+                title = "Fase 3: Comportamento na Van 🤫";
+                text = "Corrija comportamentos perigosos tocando no aluno que está com mau comportamento. Você tem 10 segundos e 3 erros permitidos.";
+                break;
+            case 4:
+                title = "Fase 4: Desembarque 🛑";
+                text = "Clique em 'DESCER!' quando o indicador estiver dentro da 'Zona Segura' (verde) da barra.";
+                break;
+        }
+        showInstructions(title, text);
+    }
+
+    function endGame(success, message) {
+        clearInterval(timerInterval);
+        cancelAnimationFrame(animationFrameId);
+        clearInterval(phase2Timer);
+        clearTimeout(studentCorrectionTimer);
+
+        if (success) {
+            playSuccessSound();
+            if (score > highScore) highScore = score;
+            message += ` Pontuação: ${score}`;
+        } else {
+            playErrorSound();
+            message += ` Pontuação: 0`;
+            score = 0;
+        }
+
+        elements.phaseDisplay.textContent = 'FIM DA MISSÃO';
+        if (elements.timerAnimateSpan) elements.timerAnimateSpan.textContent = 'ENCERRADO';
+        elements.mainButton.classList.add('hidden');
+        elements.phase13View.classList.add('hidden');
+        elements.trafficLightComp.classList.add('hidden');
+        elements.landingBarComp.classList.add('hidden');
+        elements.errorDisplay.classList.add('hidden');
+
+        elements.finalMessage.textContent = message;
+        elements.finalScore.querySelector('span').textContent = score;
+        const hs = document.querySelector('#high-score span');
+        if (hs) hs.textContent = highScore;
+        elements.endScreen.classList.remove('hidden');
+
+        updateScoreDisplay();
+    }
+
+    // Ação principal (botão)
+    window.handleActionClick = function() {
+        initializeAudio();
+        playClickSound();
+        elements.mainButton.classList.add('hidden');
+
+        if (currentPhase === 0) {
+            resetGame();
+            advancePhase(); // goes to Phase 1 instructions
+        } else if (currentPhase === 2) {
+            handlePhase2Action();
+        } else if (currentPhase === 4) {
+            handlePhase4Action();
+        }
+    };
+
+    /* -------- FASE 1: Cintos -------- */
+    function startPhase1() {
+        beltsFastened = 0;
+        let time = PHASE1_TIME;
+        if (elements.timerAnimateSpan) elements.timerAnimateSpan.textContent = `00:${String(time).padStart(2,'0')}`;
+        elements.phase13View.classList.remove('hidden');
+        elements.phase13View.style.justifyContent = 'space-around';
+
+        document.querySelectorAll('.seat').forEach(seat => seat.classList.add('pulsing'));
+
+        timerInterval = setInterval(() => {
+            time--;
+            if (elements.timerAnimateSpan) {
+                elements.timerAnimateSpan.textContent = `00:${String(time).padStart(2,'0')}`;
+                elements.timerAnimateSpan.classList.add('tick');
+                setTimeout(() => elements.timerAnimateSpan.classList.remove('tick'), 140);
+            }
+            if (time <= 0) {
+                clearInterval(timerInterval);
+                if (beltsFastened < SEAT_COUNT) {
+                    endGame(false, "TEMPO ESGOTADO! Todos os cintos devem ser afivelados.");
+                }
+            }
+        }, 1000);
+    }
+
+    window.handleSeatClick = function(seatId) {
+        // play sound on any seat click (audio should already be initialized by global listener)
+        playClickSound();
+
+        if (currentPhase !== 1) {
+            // If phase 3 active, treat as correction
+            if (currentPhase === 3) handleBehaviorCorrection(seatId);
+            return;
+        }
+
+        const seatEl = document.querySelector(`[data-seat="${seatId}"]`);
+        if (!seatEl) return;
+
+        if (!seatEl.classList.contains('corrected')) {
+            seatEl.classList.add('corrected');
+            seatEl.classList.remove('pulsing');
+            const belt = seatEl.querySelector('.seat-belt');
+            if (belt) belt.classList.add('visible');
+
+            beltsFastened++;
+            score += 100;
+            updateScoreDisplay();
+
+            if (beltsFastened === SEAT_COUNT) {
+                clearInterval(timerInterval);
+                // small delay then advance
+                setTimeout(advancePhase, 500);
+            }
+        }
+    };
+
+    /* -------- FASE 2: Semáforo -------- */
+    function startPhase2() {
+        // show traffic light, hide seats
+        elements.trafficLightComp.classList.remove('hidden');
+        elements.phase13View.classList.add('hidden');
+        elements.phaseDisplay.textContent = 'Fase 2: Semáforo';
+        elements.mainButton.textContent = 'Atravessar Agora!';
+        elements.mainButton.classList.remove('hidden');
+
+        // initialize to green for quick chance
+        updateTrafficLight(2);
+
+        // cycle states every 2.2s (green -> yellow -> red -> ...)
+        clearInterval(phase2Timer);
+        phase2Timer = setInterval(() => {
+            const nextState = (trafficLightState + 1) % 3;
+            updateTrafficLight(nextState);
+        }, 2200);
+    }
+
+    function updateTrafficLight(state) {
+        trafficLightState = state;
+        // Reset all to off
+        document.getElementById('red-light').classList.toggle('on', state === 0);
+        document.getElementById('yellow-light').classList.toggle('on', state === 1);
+        document.getElementById('green-light').classList.toggle('on', state === 2);
+    }
+
+    function handlePhase2Action() {
+        // Stop changing
+        clearInterval(phase2Timer);
+        // Evaluate
+        if (trafficLightState === 2) { // green
+            score += 300;
+            updateScoreDisplay();
+            setTimeout(advancePhase, 500);
+        } else {
+            endGame(false, "ERRO! Você tentou atravessar no sinal vermelho ou amarelo!");
+        }
+    }
+
+    /* -------- FASE 3: Comportamento -------- */
+    function startPhase3() {
+        behaviorErrors = 0;
+        phase3TimeLeft = 10;
+        elements.phase13View.classList.remove('hidden');
+        elements.phase13View.style.justifyContent = 'space-around';
+        elements.errorDisplay.classList.remove('hidden');
+        elements.errorDisplay.textContent = `Erros: ${behaviorErrors}/3`;
+        elements.mainButton.classList.add('hidden');
+
+        // clear belts and seat states
+        document.querySelectorAll('.seat').forEach(seat => {
+            const belt = seat.querySelector('.seat-belt');
+            if (belt) belt.classList.remove('visible');
+            seat.classList.remove('pulsing', 'corrected', 'bad-behavior');
+        });
+
+        timerInterval = setInterval(() => {
+            phase3TimeLeft--;
+            if (elements.timerAnimateSpan) {
+                elements.timerAnimateSpan.textContent = `00:${String(phase3TimeLeft).padStart(2,'0')}`;
+                elements.timerAnimateSpan.classList.add('tick');
+                setTimeout(() => elements.timerAnimateSpan.classList.remove('tick'), 120);
+            }
+            if (phase3TimeLeft <= 0) {
+                clearInterval(timerInterval);
+                clearTimeout(studentCorrectionTimer);
+                setTimeout(advancePhase, 300);
+            }
+        }, 1000);
+
+        studentCorrectionTimer = setTimeout(generateBadBehavior, 1200);
+    }
+
+    function generateBadBehavior() {
+        if (currentPhase !== 3 || phase3TimeLeft <= 0) return;
+
+        const studentId = Math.floor(Math.random() * SEAT_COUNT) + 1;
+        const studentEl = document.getElementById(`student-${studentId}`);
+        const seatEl = document.querySelector(`[data-seat="${studentId}"]`);
+        if (!seatEl || seatEl.classList.contains('bad-behavior')) {
+            // schedule next attempt
+            studentCorrectionTimer = setTimeout(generateBadBehavior, Math.random() * 1600 + 800);
+            return;
+        }
+
+        // mark bad behavior
+        seatEl.classList.add('bad-behavior');
+        if (studentEl) studentEl.textContent = '😡';
+
+        // player has small window to correct
+        setTimeout(() => {
+            if (seatEl.classList.contains('bad-behavior')) {
+                behaviorErrors++;
+                elements.errorDisplay.textContent = `Erros: ${behaviorErrors}/3`;
+                resetStudentState(studentId);
+
+                if (behaviorErrors >= 3) {
+                    endGame(false, "MUITO BARULHO! O limite de erros foi atingido.");
+                    return;
+                }
+            }
+            // schedule next behavior
+            studentCorrectionTimer = setTimeout(generateBadBehavior, Math.random() * 1600 + 800);
+        }, 1500);
+    }
+
+    function handleBehaviorCorrection(seatId) {
+        playClickSound();
+        const seatEl = document.querySelector(`[data-seat="${seatId}"]`);
+        if (seatEl && seatEl.classList.contains('bad-behavior')) {
+            resetStudentState(seatId);
+            score += 200;
+            updateScoreDisplay();
+            clearTimeout(studentCorrectionTimer);
+            studentCorrectionTimer = setTimeout(generateBadBehavior, 500);
+        }
+    }
+
+    function resetStudentState(studentId) {
+        const studentEl = document.getElementById(`student-${studentId}`);
+        const seatEl = document.querySelector(`[data-seat="${studentId}"]`);
+        if (seatEl) seatEl.classList.remove('bad-behavior');
+        if (studentEl) studentEl.textContent = (studentId % 2 === 0) ? '🧑' : '👧';
+    }
+
+    /* -------- FASE 4: Desembarque -------- */
+    function startPhase4() {
+        elements.landingBarComp.classList.remove('hidden');
+        elements.phase13View.classList.add('hidden');
+        elements.phaseDisplay.textContent = 'Fase 4: Desembarque';
+        elements.mainButton.textContent = 'DESCER!';
+        elements.mainButton.classList.remove('hidden');
+
+        indicatorPosition = 0;
+        indicatorDirection = 1;
+        elements.indicator.style.left = '0%';
+        animateLandingBar();
+    }
+
+    function animateLandingBar() {
+        if (currentPhase !== 4) return;
+        indicatorPosition += indicatorDirection * 1.8;
+        if (indicatorPosition >= 100 - 3) { indicatorDirection = -1; indicatorPosition = 100 - 3; }
+        else if (indicatorPosition <= 0) { indicatorDirection = 1; indicatorPosition = 0; }
+        elements.indicator.style.left = `${indicatorPosition}%`;
+        animationFrameId = requestAnimationFrame(animateLandingBar);
+    }
+
+    function handlePhase4Action() {
+        cancelAnimationFrame(animationFrameId);
+        if (indicatorPosition >= SAFE_ZONE_START && indicatorPosition <= SAFE_ZONE_END) {
+            score += 500;
+            updateScoreDisplay();
+            elements.indicator.classList.add('success');
+            setTimeout(advancePhase, 900);
+        } else {
+            endGame(false, "PERIGO! Você desceu antes da van parar completamente.");
+        }
+    }
+
+    // Inicialização
+    function initialize() {
+        elements.userIdEl.textContent = 'Standalone Mode';
+        resetGame();
+    }
+
+    window.onload = initialize;
+    </script>
+</body>
+</html>
